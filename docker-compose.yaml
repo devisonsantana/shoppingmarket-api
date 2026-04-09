@@ -1,0 +1,43 @@
+services:
+  app:
+    build: ./
+    container_name: app
+    restart: no
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+
+    ports:
+      - 80:8080
+
+    mem_limit: 500M
+    cpus: 0.5
+
+    networks:
+      - development_network
+
+  db_server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: db_server
+    restart: no
+
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: Str0ngPass!123
+
+    volumes:
+      - $VOLUMES/.mssql:/var/opt/mssql
+
+    ports:
+      - 1433:1433
+
+    mem_limit: 2G
+    cpus: 0.8
+
+    networks:
+      - development_network
+
+# ISOLATED NETWORK
+networks:
+  development_network:
+    driver: bridge

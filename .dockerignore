@@ -1,0 +1,22 @@
+# Exclude build artifacts (crucial for multi-stage builds)
+**/bin
+**/obj
+
+# Exclude local environment/secrets
+.env
+appsettings.Development.json
+secrets.json
+
+# Exclude IDE settings
+.vs
+.vscode
+*.user
+
+# Exclude source control
+.git
+.gitignore
+
+# Exclude Docker files themselves
+Dockerfile
+docker-compose*
+.dockerignore
