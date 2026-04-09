@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "dotnet-ef": {
+      "version": "9.0.14",
+      "commands": [
+        "dotnet-ef"
+      ],
+      "rollForward": false
+    },
+    "microsoft.dotnet-httprepl": {
+      "version": "8.0.0",
+      "commands": [
+        "httprepl"
+      ],
+      "rollForward": false
+    }
+  }
+}
