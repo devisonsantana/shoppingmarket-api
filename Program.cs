@@ -68,8 +68,6 @@ public class Program
 
         app.MapGet("/users/{id:int}", GetUserById).WithTags("Users").RequireAuthorization();
 
-        app.UseHttpsRedirection();
-
         app.Run();
     }
 
