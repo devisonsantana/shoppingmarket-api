@@ -1,43 +1,39 @@
 services:
-  app:
+  web_api:
     build: ./
-    container_name: app
-    restart: no
-
+    container_name: web_api
+    restart: on-failure
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-
+      ConnectionStrings__DefaultConnection: Host=db_psql;Port=5432;Database=shopping_market;Username=postgres;Password=postgres;
+      AllowedHosts: "*"
+      BearerKey: SUPER_SECRET_DEVELOPMENT_KEY_77984621
+    depends_on:
+      - db_psql
     ports:
       - 80:8080
-
-    mem_limit: 500M
+    mem_limit: 300M
     cpus: 0.5
-
     networks:
       - development_network
 
-  db_server:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: db_server
+  db_psql:
+    image: postgres:16
+    container_name: db_psql
     restart: no
-
     environment:
-      ACCEPT_EULA: Y
-      MSSQL_SA_PASSWORD: Str0ngPass!123
-
+      POSTGRES_DB: shopping_market
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     volumes:
-      - $VOLUMES/.mssql:/var/opt/mssql
-
+      - $VOLUMES/.postgres/:/var/lib/postgresql/data
     ports:
-      - 1433:1433
-
-    mem_limit: 2G
-    cpus: 0.8
-
+      - 5432:5432
+    mem_limit: 228M
+    cpus: 0.3
     networks:
       - development_network
 
-# ISOLATED NETWORK
 networks:
   development_network:
     driver: bridge

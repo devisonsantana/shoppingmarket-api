@@ -3,10 +3,7 @@ using ShoppingMarket.Application.DTOs;
 using ShoppingMarket.Infrastructure.Data;
 using ShoppingMarket.Domain;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using ShoppingMarket.Application.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ShoppingMarket.Infrastructure.OpenAPI;
 using ShoppingMarket.Infrastructure.Security;
 
@@ -25,7 +22,7 @@ public class Program
 
         _secretKey = builder.Configuration.GetValue<string>("BearerKey") ?? throw new InvalidOperationException("Token Key is not configured");
 
-        builder.Services.AddDbContext<DataContext>(options => options.UseSqlServer(connectionString));
+        builder.Services.AddDbContext<DataContext>(options => options.UseNpgsql(connectionString));
 
         builder.Services.AddCors(options =>
         {
