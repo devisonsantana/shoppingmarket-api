@@ -2,17 +2,25 @@ services:
   web_api:
     build: ./
     container_name: web_api
-    restart: on-failure
+    restart: no
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: Host=db_psql;Port=5432;Database=shopping_market;Username=postgres;Password=postgres;
+      DatabaseSettings__ConnectionString: mongodb://mongodbuser:mongodbxxsenha314forte@mongodb:27017
+      DatabaseSettings__DatabaseName: ShoppingMarket
+      DatabaseSettings__UsersCollectionName: Users
+      DatabaseSettings__ProductsCollectionName: Products
       AllowedHosts: "*"
       BearerKey: SUPER_SECRET_DEVELOPMENT_KEY_77984621
 
     ports:
       - 80:8080
-    mem_limit: 300M
-    cpus: 0.5
+    
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 300M
+
     networks:
       - development_network
 
