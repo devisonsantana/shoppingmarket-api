@@ -17,23 +17,6 @@ services:
     networks:
       - development_network
 
-  db_psql:
-    image: postgres:16
-    container_name: db_psql
-    restart: no
-    environment:
-      POSTGRES_DB: shopping_market
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - $VOLUMES/.postgres/:/var/lib/postgresql/data
-    ports:
-      - 5432:5432
-    mem_limit: 228M
-    cpus: 0.3
-    networks:
-      - development_network
-
   mongodb:
     image: mongodb/mongodb-community-server:6.0.5-ubuntu2204-20230514T051156Z
     container_name: mongodb
