@@ -24,10 +24,10 @@ public record UserLoginDTO
 }
 public record UserResponseDTO
 {
-    public int Id { get; init; }
+    public string Id { get; init; }
     public string Username { get; init; } = null!;
     public string Email { get; init; } = null!;
-    public UserResponseDTO(int id, string username, string email)
+    public UserResponseDTO(string id, string username, string email)
     {
         Id = id;
         Username = username;

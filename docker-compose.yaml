@@ -34,6 +34,30 @@ services:
     networks:
       - development_network
 
+  mongodb:
+    image: mongodb/mongodb-community-server:6.0.5-ubuntu2204-20230514T051156Z
+    container_name: mongodb
+    restart: no
+
+    environment:
+      MONGODB_INITDB_ROOT_USERNAME: mongodbuser
+      MONGODB_INITDB_ROOT_PASSWORD: mongodbxxsenha314forte
+
+    volumes:
+      - $VOLUMES/.mongodb:/data/db
+
+    ports:
+      - 27017:27017
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+    networks:
+      - development_network
+
 networks:
   development_network:
     driver: bridge

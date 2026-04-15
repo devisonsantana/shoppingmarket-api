@@ -1,10 +1,14 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace ShoppingMarket.Domain;
 
 public class Product
 {
-    public int Id { get; private set; }
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string? Id { get; private set; }
     public string Name { get; set; } = null!;
     public string Description { get; set; } = null!;
     [Column(TypeName = "decimal(6,2)")]

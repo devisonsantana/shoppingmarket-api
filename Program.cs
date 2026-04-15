@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using ShoppingMarket.Application.Services;
 using ShoppingMarket.Infrastructure.OpenAPI;
 using ShoppingMarket.Infrastructure.Security;
+using MongoDB.Driver;
+using MongoDB.Bson;
 
 namespace ShoppingMarket;
 
@@ -18,11 +20,11 @@ public class Program
 
         var corsPolicyName = "FrontEndCorsPolicy";
 
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("There is an error in Database Connection String");
-
         _secretKey = builder.Configuration.GetValue<string>("BearerKey") ?? throw new InvalidOperationException("Token Key is not configured");
 
-        builder.Services.AddDbContext<DataContext>(options => options.UseNpgsql(connectionString));
+        // MongoDb configuration
+        builder.Services.Configure<DataStoreSettings>(builder.Configuration.GetSection("DatabaseSettings"));
+        builder.Services.AddSingleton<MongoDbService>();
 
         builder.Services.AddCors(options =>
         {
@@ -53,7 +55,7 @@ public class Program
 
         productItems.MapGet("/", GetAllProducts);
 
-        productItems.MapGet("/{id:int}", GetProductById);
+        productItems.MapGet("/{id:length(24)}", GetProductById);
 
         productItems.MapPost("/", CreateProduct).RequireAuthorization();
 
@@ -63,19 +65,20 @@ public class Program
 
         app.MapPost("/users", Register).WithTags("Users");
 
-        app.MapGet("/users/{id:int}", GetUserById).WithTags("Users").RequireAuthorization();
+        app.MapGet("/users/{id:length(24)}", GetUserById).WithTags("Users").RequireAuthorization();
 
         app.Run();
     }
 
     #region User Methods
-    static async Task<Results<Ok<UserResponseDTO>, NotFound>> GetUserById(DataContext db, int id)
+    static async Task<Results<Ok<UserResponseDTO>, NotFound>> GetUserById(MongoDbService mongo, string id)
     {
-        return await db.Users.FindAsync(id) is User user ? TypedResults.Ok(new UserResponseDTO(user.Id, user.Username, user.Email)) : TypedResults.NotFound();
+        var user = await mongo.Users.Find(u => u.Id == id).FirstOrDefaultAsync();
+        return user is not null ? TypedResults.Ok(new UserResponseDTO(user.Id!, user.Username, user.Email)) : TypedResults.NotFound();
     }
-    static async Task<Results<Created<UserResponseDTO>, Conflict>> Register(DataContext db, UserCreateDTO dto)
+    static async Task<Results<Created<UserResponseDTO>, Conflict>> Register(MongoDbService mongo, UserCreateDTO dto)
     {
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+        var user = await mongo.Users.Find(u => u.Email == dto.Email).FirstOrDefaultAsync();
         if (user is not null)
             return TypedResults.Conflict();
 
@@ -89,16 +92,15 @@ public class Program
             Password = passwordHash
         };
 
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
+        await mongo.Users.InsertOneAsync(user);
 
-        var responseUser = new UserResponseDTO(user.Id, user.Username, user.Email);
+        var responseUser = new UserResponseDTO(user.Id!, user.Username, user.Email);
         return TypedResults.Created($"/users/{responseUser.Id}", responseUser);
 
     }
-    static async Task<Results<Ok<UserAccessDTO>, UnauthorizedHttpResult>> Login(DataContext db, UserLoginDTO dto)
+    static async Task<Results<Ok<UserAccessDTO>, UnauthorizedHttpResult>> Login(MongoDbService mongo, UserLoginDTO dto)
     {
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+        var user = await mongo.Users.Find(u => u.Email == dto.Email).FirstOrDefaultAsync();
         if (user is null)
             return TypedResults.Unauthorized();
 
@@ -108,37 +110,49 @@ public class Program
             return TypedResults.Unauthorized();
 
         var accessToken = TokenService.GenerateToken(user, _secretKey!);
-        return TypedResults.Ok(new UserAccessDTO(accessToken, new UserResponseDTO(user.Id, user.Username, user.Email)));
+        return TypedResults.Ok(new UserAccessDTO(accessToken, new UserResponseDTO(user.Id!, user.Username, user.Email)));
     }
     #endregion
 
     #region Products Methods
-    static async Task<Ok<List<Product>>> GetAllProducts(DataContext db, string? name, decimal? price, string? category, string? sortBy, string? sortOrder)
+    static async Task<Ok<List<Product>>> GetAllProducts(MongoDbService mongo, string? name, decimal? price, string? category, string? sortBy, string? sortOrder)
     {
-        var query = db.Products.AsQueryable();
+        var builder = Builders<Product>.Filter;
+        var filter = builder.Empty;
+
         if (!string.IsNullOrEmpty(name))
-            query = query.Where(p => p.Name.Contains(name));
+            filter &= builder.Regex(p => p.Name, new BsonRegularExpression(name, "i"));
 
         if (price.HasValue)
-            query = query.Where(p => p.Price == price.Value);
+            filter &= builder.Eq(p => p.Price, price.Value);
 
         if (!string.IsNullOrEmpty(category))
-            query = query.Where(p => p.Category == category);
+            filter &= builder.Eq(p => p.Category, category);
 
         var isDescending = sortOrder?.ToLower() == "desc";
-        query = sortBy?.ToLower() switch
+
+        var sort = sortBy?.ToLower() switch
         {
-            "name" => isDescending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
-            "price" => isDescending ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
-            "category" => isDescending ? query.OrderByDescending(p => p.Category) : query.OrderBy(p => p.Category),
-            _ => isDescending ? query.OrderByDescending(p => p.Id) : query.OrderBy(p => p.Id)
+            "name" => isDescending ? Builders<Product>.Sort.Descending(p => p.Name) : Builders<Product>.Sort.Ascending(p => p.Name),
+            "price" => isDescending ? Builders<Product>.Sort.Descending(p => p.Price) : Builders<Product>.Sort.Ascending(p => p.Price),
+            "category" => isDescending ? Builders<Product>.Sort.Descending(p => p.Category) : Builders<Product>.Sort.Ascending(p => p.Category),
+            _ => isDescending ? Builders<Product>.Sort.Descending(p => p.Id) : Builders<Product>.Sort.Ascending(p => p.Id)
         };
 
-        var products = await query.ToListAsync();
+        var options = new FindOptions
+        {
+            Collation = new Collation("pt", strength: CollationStrength.Primary)
+        };
+
+        var products = await mongo.Products
+            .Find(filter, options)
+            .Sort(sort)
+            .ToListAsync();
+
         return TypedResults.Ok(products);
     }
-    static async Task<Results<Ok<Product>, NotFound>> GetProductById(DataContext db, int id) => await db.Products.FindAsync(id) is Product product ? TypedResults.Ok<Product>(product) : TypedResults.NotFound();
-    static async Task<Created<Product>> CreateProduct(DataContext db, ProductDTO dto)
+    static async Task<Results<Ok<Product>, NotFound>> GetProductById(MongoDbService mongo, string id) => await mongo.Products.Find(p => p.Id == id).FirstOrDefaultAsync() is Product product ? TypedResults.Ok<Product>(product) : TypedResults.NotFound();
+    static async Task<Created<Product>> CreateProduct(MongoDbService mongo, ProductDTO dto)
     {
         var product = new Product
         {
@@ -149,11 +163,11 @@ public class Program
             Category = dto.Category,
             Image = dto.Image
         };
-        db.Products.Add(product);
-        await db.SaveChangesAsync();
+
+        await mongo.Products.InsertOneAsync(product);
         return TypedResults.Created($"/products/{product.Id}", product);
     }
-    static async Task<Ok<string>> CreateProductsByList(DataContext db, List<ProductDTO> dtos)
+    static async Task<Ok<string>> CreateProductsByList(MongoDbService mongo, List<ProductDTO> dtos)
     {
         var products = dtos.Select(p => new Product
         {
@@ -164,8 +178,8 @@ public class Program
             Category = p.Category,
             Image = p.Image
         }).ToList();
-        db.Products.AddRange(products);
-        await db.SaveChangesAsync();
+
+        await mongo.Products.InsertManyAsync(products);
         return TypedResults.Ok($"{products.Count} products added");
     }
     #endregion
